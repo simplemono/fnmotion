@@ -1,0 +1,9 @@
+;; The pure parts (fnmotion.core, timeline, captions) are cljc and need
+;; nothing; the player needs Replicant in the browser.
+{:paths ["src"]
+ :deps {no.cjohansen/replicant {:mvn/version "2025.06.21"}}
+ :aliases
+ {:test {:extra-paths ["test"]
+         :extra-deps {io.github.cognitect-labs/test-runner
+                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+         :main-opts ["-m" "cognitect.test-runner"]}}}

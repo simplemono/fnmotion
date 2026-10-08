@@ -1,0 +1,12 @@
+;; The tests of the pure parts on babashka: bb test
+{:paths ["src" "test"]
+ :tasks
+ {test {:doc "Runs the tests."
+        :requires ([clojure.test :as t])
+        :task (let [namespaces '[fnmotion.captions-test
+                                 fnmotion.core-test
+                                 fnmotion.timeline-test]]
+                (apply require namespaces)
+                (let [{:keys [fail error]} (apply t/run-tests namespaces)]
+                  (when (pos? (+ fail error))
+                    (System/exit 1))))}}}

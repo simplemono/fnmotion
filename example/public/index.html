@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fnmotion</title>
+<style>
+  body { margin: 0; background: #0b0c0e; color: #e8eaed; font: 16px/1.5 system-ui, sans-serif; display: flex; justify-content: center; }
+  .fnmotion { width: 360px; padding: 24px 0; }
+  .fnmotion-frame { width: 360px; height: 640px; border-radius: 12px; overflow: hidden; background: #000; }
+  .stage { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+  .stage h1 { margin: 0; font-size: 56px; font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+  .caption { min-height: 2.4em; margin: 0; padding: 0 24px; font-size: 22px; font-weight: 700; text-align: center; color: #cfd8e3; }
+  .caption .on { color: #ffd166; }
+  .bar { position: absolute; left: 0; bottom: 0; height: 6px; background: #ffd166; }
+  .card { padding: 28px; text-align: center; }
+  .card h2 { margin: 0 0 8px; font-size: 26px; }
+  .card p { margin: 0; color: #9aa6b2; }
+  .fnmotion-controls { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .fnmotion-controls input { flex: 1; }
+  .fnmotion-controls button { padding: 6px 14px; border: 1px solid #2b3036; border-radius: 8px; background: #1a1d21; color: #e8eaed; font: inherit; cursor: pointer; }
+  .fnmotion-time { font-variant-numeric: tabular-nums; color: #9aa6b2; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="/js/main.js"></script>
+</body>
+</html>
