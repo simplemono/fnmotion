@@ -5,7 +5,13 @@
  ;; both resolves one Replicant (tools.deps cannot compare git and maven).
  :deps {no.cjohansen/replicant
         {:git/url "https://github.com/cjohansen/replicant.git"
-         :git/sha "a7202a4243e69f63117c1bd1e9cbadcad380c280"}}
+         :git/sha "a7202a4243e69f63117c1bd1e9cbadcad380c280"}
+        ;; fnmotion.rframes, the server-side player, needs rframes; the
+        ;; pure parts do not.
+        io.github.simplemono/rframes$server
+        {:git/url "https://github.com/simplemono/rframes.git"
+         :git/sha "a0812c6a7506d4986214e9aaa80ffa03f521867c"
+         :deps/root "server"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner

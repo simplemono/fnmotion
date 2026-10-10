@@ -1,10 +1,15 @@
 ;; The tests of the pure parts on babashka: bb test
 {:paths ["src" "test"]
+ :deps {io.github.simplemono/rframes$server
+        {:git/url "https://github.com/simplemono/rframes.git"
+         :git/sha "a0812c6a7506d4986214e9aaa80ffa03f521867c"
+         :deps/root "server"}}
  :tasks
  {test {:doc "Runs the tests."
         :requires ([clojure.test :as t])
         :task (let [namespaces '[fnmotion.captions-test
                                  fnmotion.core-test
+                                 fnmotion.rframes-test
                                  fnmotion.timeline-test]]
                 (apply require namespaces)
                 (let [{:keys [fail error]} (apply t/run-tests namespaces)]

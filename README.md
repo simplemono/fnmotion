@@ -73,6 +73,26 @@ keeps a `<video>` or `<audio>` in step.
 (player/mount! {:element "#app" :scene video :media "#voice"})
 ```
 
+**`fnmotion.rframes`** (server, babashka or the JVM): the same player for
+an [rframes](https://github.com/simplemono/rframes) app, where the frame
+is rendered on the server and pushed to the page. The app keeps the
+design under `:design` and the time under `:motion/t` in its one atom;
+`player` renders the frame at the current time with play, a scrubber and
+the clock, `commands` are the entries behind the controls (`:motion/toggle`,
+`:motion/seek`, and `:design/set`, which writes a control's value into the
+design, numbers staying numbers, `setter` makes the `:on` map), a tick
+loop pushes sixty frames a second while it plays, `watch-design!` keeps
+the design in a file across restarts, `css` has the rules.
+
+```clojure
+(def db (atom {:design {:title "Hello" :size 40}}))
+(defn frame [{:keys [title size]} t]
+  [:h1 {:style {:font-size (fm/px size) :opacity (fm/progress t 0 1)}} title])
+(player/player @db {:frame frame :duration 6})     ; in the view
+(player/commands db {:duration 6})                 ; in the register
+[:input {:type "range" :min 12 :max 96 :value size :on (player/setter [:size])}]
+```
+
 ## The example
 
 A ten-second short: a title that springs in, captions from word timings
