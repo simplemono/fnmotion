@@ -51,7 +51,12 @@
     (swap! db assoc-in [:design :title] "second")
     (is (= "{:title \"second\"}" (slurp file)))
     (testing "a new atom reads it back"
-      (is (= {:title "second"} (:design @(player/watch-design! (atom {:design {}}) file)))))))
+      (is (= {:title "second"} (:design @(player/watch-design! (atom {:design {}}) file)))))
+    (testing "an edit of the file from outside shows up in the atom"
+      (Thread/sleep 1100)
+      (spit file "{:title \"third\"}")
+      (Thread/sleep (* 3 player/design-poll-ms))
+      (is (= {:title "third"} (:design @db))))))
 
 (defn- fake-w
   [data]

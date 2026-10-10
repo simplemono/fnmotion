@@ -111,9 +111,31 @@
   [db path value]
   (swap! db assoc-in (into [:design] (map #(if (string? %) (keyword %) %)) path) (coerce value)))
 
+(def design-poll-ms
+  "How often `watch-design!` looks at the file for an edit from outside."
+  500)
+
+(defn- read-design-file!
+  "The design in the file into the atom and onto the page, when the file
+  holds another design than the atom. True when the file could be read:
+  a write in progress is empty or does not parse, and the next look sees
+  the whole file."
+  [db file]
+  (try
+    (let [design (edn/read-string (slurp file))]
+      (when (some? design)
+        (when (not= design (:design @db))
+          (swap! db assoc :design design)
+          (sse/refresh-all!))
+        true))
+    (catch Exception _
+      false)))
+
 (defn watch-design!
-  "Writes the design into `file` whenever it changes, and reads it back
-  first when the file exists: the design survives a restart."
+  "Writes the design into `file` whenever it changes, reads it back first
+  when the file exists, and reads it again when something else writes
+  the file (an editor, an agent): the design survives a restart, and an
+  edit of the file shows up on the page."
   [db file]
   (let [file (io/file file)]
     (when (.isFile file)
@@ -123,6 +145,13 @@
                  (when (not= (:design old) (:design new))
                    (io/make-parents file)
                    (spit file (pr-str (:design new))))))
+    (future
+      (loop [seen (.lastModified file)]
+        (Thread/sleep design-poll-ms)
+        (let [now (.lastModified file)]
+          (recur (if (or (= seen now) (read-design-file! db file))
+                   now
+                   seen)))))
     db))
 
 ;;; The entries and the view
