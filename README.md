@@ -103,8 +103,10 @@ screenshots as they come and mixes the audio tracks of the design in:
 :fade-in 0 :fade-out 1 :loop? false}`, the words HyperFrames uses. The
 server-side player plays the same tracks in the browser in step with the
 scrubber, from `(:audio design)`, with `script` in the head of the page.
-Chrome (`google-chrome` or `chromium` on the PATH, or `CHROME`) and
-ffmpeg are the only things it needs.
+A few Chromes work side by side (`:workers`, half the processors by
+default), each on every nth frame. Chrome (`google-chrome` or
+`chromium` on the PATH, or `CHROME`) and ffmpeg are the only things it
+needs.
 
 ```clojure
 (render/render! {:frame frame :design design :duration 6 :fps 30

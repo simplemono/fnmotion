@@ -10,10 +10,11 @@
                 :out \"../hello.mp4\"})
 
   Chrome is driven over its DevTools protocol, the way HyperFrames does
-  it: one page with a stage of the video's size and a function that puts
+  it: a page with a stage of the video's size and a function that puts
   the HTML of a frame into the stage, then `Page.captureScreenshot` per
-  frame, piped into ffmpeg as it comes. Nothing but the video reaches the
-  disk. The page is a file in `:dir`, so a relative `src` in a frame
+  frame, piped into ffmpeg in order as they come. A few Chromes work
+  side by side (`:workers`), each on every nth frame. Nothing but the
+  video reaches the disk. The page is a file in `:dir`, so a relative `src` in a frame
   finds the file it finds on the page of the design; `:head` is what the
   head of that page has, the styles and the fonts.
 
@@ -102,13 +103,24 @@
               (recur (+ waited 100))))))))
 
 (defn- start-chrome!
+  "A headless Chrome of its own, with a window no smaller than a desktop
+  one: Chrome takes a tiny window for hidden and paints no frame in it,
+  and a screenshot waits for a frame. The page itself gets the size of
+  the video from `prepare-page!`."
   [chrome [w h]]
-  (let [profile (fs/create-temp-dir {:prefix "fnmotion-chrome"})
+  (let [[w h] [(max (long w) 1024) (max (long h) 768)]
+        profile (fs/create-temp-dir {:prefix "fnmotion-chrome"})
         log (fs/file profile "chrome.log")
         process (process/process [chrome
                                   "--headless=new" "--no-sandbox" "--disable-gpu" "--disable-dev-shm-usage"
-                                  "--hide-scrollbars" "--no-first-run" "--disable-extensions"
+                                  "--hide-scrollbars" "--no-first-run" "--disable-extensions" "--mute-audio"
                                   "--disable-background-networking" "--force-device-scale-factor=1"
+                                  "--force-color-profile=srgb"
+                                  ;; Every page stays awake, as with Puppeteer.
+                                  "--disable-renderer-backgrounding"
+                                  "--disable-backgrounding-occluded-windows"
+                                  "--disable-background-timer-throttling"
+                                  "--disable-hang-monitor"
                                   (str "--window-size=" w "," h)
                                   "--remote-debugging-port=0"
                                   (str "--user-data-dir=" profile)
@@ -258,59 +270,113 @@
 
 ;;; The render
 
+(defn default-workers
+  "Half the processors, one to four: a Chrome per worker."
+  []
+  (max 1 (min 4 (quot (.availableProcessors (Runtime/getRuntime)) 2))))
+
+(defn- prepare-page!
+  "A page of the size of the video, with the render page loaded."
+  [cdp [w h] page]
+  (call! cdp "Emulation.setDeviceMetricsOverride" {:width w
+                                                   :height h
+                                                   :deviceScaleFactor 1
+                                                   :mobile false})
+  (call! cdp "Page.navigate" {:url (str (.toUri (fs/path page)))})
+  (call! cdp "Page.bringToFront" {})
+  (wait-ready! cdp)
+  cdp)
+
+(defn- work!
+  "One worker: its frames, every `workers`th from `first-index`, shown and
+  screenshot into their slots. It stays close behind the writer so that
+  no more than a few screenshots wait in memory. An error goes into the
+  slots it still owes, so that the writer sees it."
+  [cdp {:keys [frame design times slots written workers]} first-index]
+  (let [mine (range first-index (count times) workers)]
+    (try
+      (doseq [i mine]
+        (while (> (- i @written) (* 2 workers))
+          (Thread/sleep 5))
+        (evaluate! cdp (str "window.__fnmotion.show("
+                            (json/generate-string (html/html (frame design (nth times i))))
+                            ")"))
+        (deliver (nth slots i) (screenshot! cdp)))
+      (catch Throwable e
+        (doseq [i mine]
+          (deliver (nth slots i) e))))))
+
+(defn- write-frames!
+  "The screenshots into ffmpeg, in order, as they come."
+  [in {:keys [slots written on-progress]}]
+  (doseq [[i slot] (map-indexed vector slots)]
+    (let [png @slot]
+      (when (instance? Throwable png)
+        (throw png))
+      (.write in ^bytes png)
+      (reset! written (inc i))
+      (when on-progress
+        (on-progress (inc i) (count slots))))))
+
 (defn render!
   "Renders the design to `:out`, a path relative to the working directory,
   and returns {:out :frames :seconds}. The options are in the namespace;
   `:fps` is 30, `:dir` the working directory, `:chrome` is found when
-  absent, `:ffmpeg` on the PATH, `:on-progress` a function of the frames
-  done and the frames in all."
-  [{:keys [frame design duration fps size head background dir audio out chrome ffmpeg on-progress]
+  absent, `:ffmpeg` on the PATH, `:workers` the Chromes that screenshot
+  side by side (`default-workers`), `:on-progress` a function of the
+  frames done and the frames in all."
+  [{:keys [frame design duration fps size head background dir audio out chrome ffmpeg workers on-progress]
     :or {fps 30 dir "."}}]
   (let [chrome (or chrome
                    (find-chrome)
                    (throw (ex-info "No Chrome: CHROME in the environment, or google-chrome or chromium on the PATH." {})))
+        workers (max 1 (long (or workers (default-workers))))
         dir (fs/absolutize (fs/file dir))
         ;; H.264 wants even sizes.
         size (mapv #(* 2 (quot (long %) 2)) size)
         times (frame-times duration fps)
+        workers (min workers (max 1 (count times)))
         page (fs/file dir ".fnmotion-render.html")
         out (fs/absolutize (fs/file out))
         started (System/nanoTime)]
     (spit (str page) (page-html {:size size :head head :background background}))
-    (let [{:keys [process profile port]} (start-chrome! chrome size)]
+    (let [chromes (mapv (fn [_] (start-chrome! chrome size)) (range workers))]
       (try
-        (let [cdp (connect! (page-url port))
+        (let [cdps (mapv (fn [{:keys [port]}]
+                           (prepare-page! (connect! (page-url port)) size page))
+                         chromes)
               encoder (process/process (ffmpeg-args {:ffmpeg ffmpeg :fps fps :duration duration :audio audio :out out})
                                        {:dir (str dir) :in :stream :out :string :err :string})]
           (try
-            (call! cdp "Emulation.setDeviceMetricsOverride" {:width (first size)
-                                                             :height (second size)
-                                                             :deviceScaleFactor 1
-                                                             :mobile false})
-            (call! cdp "Page.navigate" {:url (str (.toUri (fs/path page)))})
-            (call! cdp "Page.bringToFront" {})
-            (wait-ready! cdp)
-            (with-open [in (:in encoder)]
-              (doseq [[i t] (map-indexed vector times)]
-                (evaluate! cdp (str "window.__fnmotion.show(" (json/generate-string (html/html (frame design t))) ")"))
-                (.write in (screenshot! cdp))
-                (when on-progress
-                  (on-progress (inc i) (count times)))))
+            (let [job {:frame frame
+                       :design design
+                       :times times
+                       :slots (vec (repeatedly (count times) promise))
+                       :written (atom 0)
+                       :workers workers
+                       :on-progress on-progress}
+                  running (doall (map-indexed (fn [k cdp] (future (work! cdp job k))) cdps))]
+              (with-open [in (:in encoder)]
+                (write-frames! in job))
+              (run! deref running))
             (let [{:keys [exit err]} @encoder]
               (when-not (zero? exit)
                 (throw (ex-info (str "ffmpeg failed: " (str/trim (str err))) {:exit exit}))))
             {:out (str out)
              :frames (count times)
+             :workers workers
              :seconds (/ (- (System/nanoTime) started) 1e9)}
             (catch Throwable e
               (fs/delete-if-exists out)
               (throw e))
             (finally
-              (ws/close! (:socket cdp))
+              (doseq [cdp cdps]
+                (ws/close! (:socket cdp)))
               (when (.isAlive (:proc encoder))
                 (process/destroy-tree encoder)))))
         (finally
-          (stop-chrome! process profile)
+          (doseq [{:keys [process profile]} chromes]
+            (stop-chrome! process profile))
           (fs/delete-if-exists page))))))
 
 (comment

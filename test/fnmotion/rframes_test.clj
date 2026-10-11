@@ -92,10 +92,12 @@
     (is (= {:data-t 1.0 :data-playing "false"} (second view)))
     (is (= 1080 (get-in view [2 1 :data-width])))
     (is (= [:h1 {:style {:opacity 1.0}} "Hi"] (get-in view [2 2 2])))
-    (is (= {:src "music.mp3" :data-start 0 :data-media-start 0 :data-volume 0.5 :loop false}
+    (is (= {:src "music.mp3" :data-start 0 :data-end 4.0 :data-media-start 0 :data-volume 0.5
+            :data-fade-in 0 :data-fade-out 0 :loop false}
            (-> (some #(when (= :audio (first %)) %) elements)
                (second)
-               (select-keys [:src :data-start :data-media-start :data-volume :loop])))))
+               (select-keys [:src :data-start :data-end :data-media-start :data-volume
+                             :data-fade-in :data-fade-out :loop])))))
   (testing "without a size the frame is as it is"
     (is (= [:div.motion-frame [:h1 {:style {:opacity 0.0}} "Hi"]]
            (get (player/player {:design {:title "Hi"}} {:frame frame :duration 4}) 2)))))

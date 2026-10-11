@@ -223,18 +223,22 @@
 (defn audio-tracks
   "The audio tracks of the design as elements `script` keeps in step with
   the time. A track is `{:src :start :duration :media-start :volume
-  :loop?}`, see fnmotion.render."
-  [tracks]
+  :fade-in :fade-out :loop?}`, see fnmotion.render; `video-duration`
+  tells where a track without a duration ends."
+  [tracks video-duration]
   (when (seq tracks)
     [:div.motion-audio
-     (for [{:keys [src start duration media-start volume loop?]} tracks]
+     (for [{:keys [src start duration media-start volume fade-in fade-out loop?]} tracks
+           :let [start (or start 0)]]
        [:audio {:replicant/key src
                 :src src
                 :preload "auto"
-                :data-start (or start 0)
-                :data-duration duration
+                :data-start start
+                :data-end (+ start (or duration (- video-duration start)))
                 :data-media-start (or media-start 0)
                 :data-volume (or volume 1)
+                :data-fade-in (or fade-in 0)
+                :data-fade-out (or fade-out 0)
                 :loop (boolean loop?)}])]))
 
 (defn player
@@ -251,13 +255,14 @@
      (if size
        (stage size the-frame)
        [:div.motion-frame the-frame])
-     (audio-tracks (or audio (:audio design)))
+     (audio-tracks (or audio (:audio design)) duration)
      (controls db-value duration)]))
 
 (def script
   "For a <script> in the head of the page: scales the stage to the width
   of the pane, and keeps the audio tracks in step with the time, playing
-  while the design plays, at the position of the scrubber otherwise."
+  while the design plays, at the position of the scrubber otherwise, at
+  their volume with their fades."
   "(function () {
   function fit() {
     var frame = document.querySelector('.motion-frame[data-width]');
@@ -274,16 +279,21 @@
     var playing = motion.dataset.playing === 'true';
     Array.prototype.forEach.call(motion.querySelectorAll('audio[data-start]'), function (audio) {
       var start = parseFloat(audio.dataset.start) || 0;
-      var duration = parseFloat(audio.dataset.duration);
+      var end = parseFloat(audio.dataset.end);
       var mediaStart = parseFloat(audio.dataset.mediaStart) || 0;
       var volume = parseFloat(audio.dataset.volume);
+      var fadeIn = parseFloat(audio.dataset.fadeIn) || 0;
+      var fadeOut = parseFloat(audio.dataset.fadeOut) || 0;
       var local = t - start;
-      var on = local >= 0 && (isNaN(duration) || local < duration);
+      var on = local >= 0 && (isNaN(end) || t < end);
       var want = mediaStart + local;
       if (audio.loop && audio.duration > mediaStart) {
         want = mediaStart + (local % (audio.duration - mediaStart));
       }
-      audio.volume = isNaN(volume) ? 1 : Math.max(0, Math.min(1, volume));
+      var gain = isNaN(volume) ? 1 : volume;
+      if (fadeIn > 0) gain *= Math.max(0, Math.min(1, local / fadeIn));
+      if (fadeOut > 0 && !isNaN(end)) gain *= Math.max(0, Math.min(1, (end - t) / fadeOut));
+      audio.volume = Math.max(0, Math.min(1, gain));
       if (playing && on) {
         if (Math.abs(audio.currentTime - want) > 0.3) audio.currentTime = want;
         if (audio.paused) audio.play().catch(function () {});
