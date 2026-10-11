@@ -126,6 +126,14 @@
                                   (str "--user-data-dir=" profile)
                                   "about:blank"]
                                  {:out log :err log})]
+    ;; A render that is ended from outside (the person stops it, the
+    ;; process gets a signal) leaves no Chrome and no profile behind.
+    (.addShutdownHook (Runtime/getRuntime)
+                      (Thread. (fn []
+                                 (when (fs/exists? profile)
+                                   (process/destroy-tree process)
+                                   (.waitFor (:proc process) 5 java.util.concurrent.TimeUnit/SECONDS)
+                                   (fs/delete-tree profile)))))
     {:process process
      :profile profile
      :port (devtools-port profile process)}))
