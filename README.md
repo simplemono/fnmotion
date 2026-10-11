@@ -78,7 +78,8 @@ an [rframes](https://github.com/simplemono/rframes) app, where the frame
 is rendered on the server and pushed to the page. The app keeps the
 design under `:design` and the time under `:motion/t` in its one atom;
 `player` renders the frame at the current time with play, a scrubber and
-the clock, `commands` are the entries behind the controls (`:motion/toggle`,
+the clock, in a stage of the video's `:size` that `script` scales to the
+pane, `commands` are the entries behind the controls (`:motion/toggle`,
 `:motion/seek`, and `:design/set`, which writes a control's value into the
 design, numbers staying numbers, `setter` makes the `:on` map), a tick
 loop pushes sixty frames a second while it plays, `watch-design!` keeps
@@ -88,9 +89,28 @@ the design in a file across restarts, `css` has the rules.
 (def db (atom {:design {:title "Hello" :size 40}}))
 (defn frame [{:keys [title size]} t]
   [:h1 {:style {:font-size (fm/px size) :opacity (fm/progress t 0 1)}} title])
-(player/player @db {:frame frame :duration 6})     ; in the view
+(player/player @db {:frame frame :duration 6 :size [1080 1920]})   ; in the view
 (player/commands db {:duration 6})                 ; in the register
 [:input {:type "range" :min 12 :max 96 :value size :on (player/setter [:size])}]
+```
+
+**`fnmotion.render`** (server, babashka or the JVM): the design as a
+video file. Every frame is rendered to HTML (`fnmotion.html`), a headless
+Chrome shows them one after the other at the size of the video and
+screenshots each over its DevTools protocol, ffmpeg encodes the
+screenshots as they come and mixes the audio tracks of the design in:
+`{:src "music.mp3" :start 0 :duration nil :media-start 0 :volume 0.6
+:fade-in 0 :fade-out 1 :loop? false}`, the words HyperFrames uses. The
+server-side player plays the same tracks in the browser in step with the
+scrubber, from `(:audio design)`, with `script` in the head of the page.
+Chrome (`google-chrome` or `chromium` on the PATH, or `CHROME`) and
+ffmpeg are the only things it needs.
+
+```clojure
+(render/render! {:frame frame :design design :duration 6 :fps 30
+                 :size [1080 1920] :head styles :dir "."
+                 :audio (:audio design)
+                 :out "hello.mp4"})
 ```
 
 ## The example

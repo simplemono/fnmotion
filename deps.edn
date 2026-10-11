@@ -3,7 +3,13 @@
 {:paths ["src"]
  ;; Replicant as the git coordinate parts-cljs uses, so that an app with
  ;; both resolves one Replicant (tools.deps cannot compare git and maven).
- :deps {no.cjohansen/replicant
+ :deps {;; fnmotion.render and fnmotion.html on the JVM; babashka has them built in.
+        babashka/fs {:mvn/version "0.5.34"}
+        babashka/process {:mvn/version "0.6.25"}
+        org.babashka/http-client {:mvn/version "0.4.25"}
+        cheshire/cheshire {:mvn/version "6.2.0"}
+        hiccup/hiccup {:mvn/version "2.0.0"}
+        no.cjohansen/replicant
         {:git/url "https://github.com/cjohansen/replicant.git"
          :git/sha "a7202a4243e69f63117c1bd1e9cbadcad380c280"}
         ;; fnmotion.rframes, the server-side player, needs rframes; the

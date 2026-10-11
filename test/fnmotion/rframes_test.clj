@@ -82,3 +82,20 @@
         (is (some #{"Play"} strings))
         (is (= 500 (:value (second range))))
         (is (some #{"0:01.0 / 0:02.0"} strings))))))
+
+(deftest player-test
+  (let [view (player/player {:design {:title "Hi" :audio [{:src "music.mp3" :volume 0.5}]}
+                             :motion/t 1.0}
+                            {:frame frame :duration 4 :size [1080 1920]})
+        elements (filter vector? (tree-seq sequential? seq view))]
+    (is (= :div.motion (first view)))
+    (is (= {:data-t 1.0 :data-playing "false"} (second view)))
+    (is (= 1080 (get-in view [2 1 :data-width])))
+    (is (= [:h1 {:style {:opacity 1.0}} "Hi"] (get-in view [2 2 2])))
+    (is (= {:src "music.mp3" :data-start 0 :data-media-start 0 :data-volume 0.5 :loop false}
+           (-> (some #(when (= :audio (first %)) %) elements)
+               (second)
+               (select-keys [:src :data-start :data-media-start :data-volume :loop])))))
+  (testing "without a size the frame is as it is"
+    (is (= [:div.motion-frame [:h1 {:style {:opacity 0.0}} "Hi"]]
+           (get (player/player {:design {:title "Hi"}} {:frame frame :duration 4}) 2)))))
