@@ -48,15 +48,19 @@
                   (make-array java.nio.file.attribute.FileAttribute 0)))
         file (io/file dir "design.edn")
         db (player/watch-design! (atom {:design {:title "first"}}) file)]
-    (swap! db assoc-in [:design :title] "second")
-    (is (= "{:title \"second\"}" (slurp file)))
-    (testing "a new atom reads it back"
-      (is (= {:title "second"} (:design @(player/watch-design! (atom {:design {}}) file)))))
-    (testing "an edit of the file from outside shows up in the atom"
-      (Thread/sleep 1100)
-      (spit file "{:title \"third\"}")
-      (Thread/sleep (* 3 player/design-poll-ms))
-      (is (= {:title "third"} (:design @db))))))
+    (try
+      (swap! db assoc-in [:design :title] "second")
+      (is (= "{:title \"second\"}" (slurp file)))
+      (testing "a new atom reads it back"
+        (is (= {:title "second"} (:design @(player/watch-design! (atom {:design {}}) file)))))
+      (testing "an edit of the file from outside shows up in the atom"
+        (Thread/sleep 1100)
+        (spit file "{:title \"third\"}")
+        (Thread/sleep (* 3 player/design-poll-ms))
+        (is (= {:title "third"} (:design @db))))
+      (finally
+        (io/delete-file file true)
+        (io/delete-file (io/file dir) true)))))
 
 (defn- fake-w
   [data]
